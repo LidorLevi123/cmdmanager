@@ -1,29 +1,79 @@
-import { Monitor, RefreshCw } from "lucide-react";
+import { Monitor, RefreshCw, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useClients } from "@/hooks/use-clients";
+import { useState, useMemo } from "react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-const CLIENT_COLORS = [
-  'bg-blue-100 text-blue-600',
-  'bg-green-100 text-green-600',
-  'bg-purple-100 text-purple-600',
-  'bg-orange-100 text-orange-600',
-  'bg-red-100 text-red-600',
-  'bg-teal-100 text-teal-600',
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest First" },
+  { value: "oldest", label: "Oldest First" },
+  { value: "hostname", label: "Hostname" },
+  { value: "ip", label: "IP Address" },
 ];
 
 function ConnectedClients() {
   const { data: clients = [], isLoading, refetch } = useClients();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedClass, setSelectedClass] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
 
-  const getClientColor = (index: number) => {
-    return CLIENT_COLORS[index % CLIENT_COLORS.length];
-  };
+  // Get unique class IDs from clients
+  const uniqueClassIds = useMemo(() => {
+    const classIds = new Set(clients.map(client => client.classId));
+    return Array.from(classIds).sort();
+  }, [clients]);
+
+  // Filter and sort clients
+  const filteredAndSortedClients = useMemo(() => {
+    let filtered = [...clients];
+
+    // Apply class filter
+    if (selectedClass && selectedClass !== 'all') {
+      filtered = filtered.filter(client => client.classId === selectedClass);
+    }
+
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(client => 
+        client.hostname.toLowerCase().includes(query) ||
+        client.ip.toLowerCase().includes(query) ||
+        client.classId.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "newest":
+          return new Date(b.connectedAt).getTime() - new Date(a.connectedAt).getTime();
+        case "oldest":
+          return new Date(a.connectedAt).getTime() - new Date(b.connectedAt).getTime();
+        case "hostname":
+          return a.hostname.localeCompare(b.hostname);
+        case "ip":
+          return a.ip.localeCompare(b.ip);
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  }, [clients, selectedClass, searchQuery, sortBy]);
 
   return (
-    <Card>
-      <div className="p-6 border-b border-gray-100">
-        <div className="flex items-center justify-between">
+    <Card className="h-[auto] max-h-[800px] flex flex-col">
+      <div className="p-6 border-b border-gray-100 flex-none">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center">
               <Monitor className="text-green-600 w-5 h-5" />
@@ -35,7 +85,7 @@ function ConnectedClients() {
           </div>
           <div className="flex items-center space-x-2">
             <Badge variant="secondary" className="bg-green-500/10 text-green-600">
-              {clients.length} Online
+              {filteredAndSortedClients.length} of {clients.length} Online
             </Badge>
             <Button
               variant="ghost"
@@ -47,19 +97,73 @@ function ConnectedClients() {
             </Button>
           </div>
         </div>
+
+        {/* Search and Filters */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="relative">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+            <Input
+              placeholder="Search hostname, IP, or class..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+          <Select
+            value={selectedClass}
+            onValueChange={setSelectedClass}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Filter by Class" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Classes</SelectItem>
+              {uniqueClassIds.map((classId) => (
+                <SelectItem key={classId} value={classId}>
+                  {classId}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={sortBy}
+            onValueChange={setSortBy}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setSearchQuery("");
+              setSelectedClass("all");
+              setSortBy("newest");
+            }}
+          >
+            Clear Filters
+          </Button>
+        </div>
       </div>
 
-      <CardContent className="p-6">
-        {clients.length > 0 ? (
+      <CardContent className="p-6 overflow-auto flex-1">
+        {filteredAndSortedClients.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {clients.map((client, index) => (
+            {filteredAndSortedClients.map((client) => (
               <div
                 key={client.id}
                 className="bg-gray-50 rounded-lg p-4 border border-gray-200"
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getClientColor(index)}`}>
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-100 text-blue-600">
                       <Monitor className="w-4 h-4" />
                     </div>
                     <div>
@@ -91,7 +195,11 @@ function ConnectedClients() {
               <Monitor className="text-gray-400 w-8 h-8" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Connected Clients</h3>
-            <p className="text-gray-500">Clients will appear here when they connect to the long-polling endpoint</p>
+            <p className="text-gray-500">
+              {clients.length > 0 
+                ? "No clients match your search criteria"
+                : "Clients will appear here when they connect to the long-polling endpoint"}
+            </p>
           </div>
         )}
       </CardContent>

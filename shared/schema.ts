@@ -16,6 +16,7 @@ export type ConnectedClient = z.infer<typeof connectedClientSchema>;
 export const commandSchema = z.object({
   classId: z.string(),
   cmd: z.string(),
+  clientId: z.string().optional(),
 });
 
 export type Command = z.infer<typeof commandSchema>;

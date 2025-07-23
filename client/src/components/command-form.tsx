@@ -14,6 +14,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useClients } from "@/hooks/use-clients";
 
 const ALLOWED_CLASS_IDS = [
   "58.-1.23",
@@ -32,12 +33,19 @@ const QUICK_COMMANDS = [
 
 function CommandForm() {
   const [selectedClassId, setSelectedClassId] = useState("");
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [commandText, setCommandText] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: clients = [] } = useClients();
+
+  // Filter clients based on selected class ID
+  const filteredClients = clients.filter(
+    (client) => !selectedClassId || client.classId === selectedClassId
+  );
 
   const commandMutation = useMutation({
-    mutationFn: async (data: { classId: string; cmd: string }) => {
+    mutationFn: async (data: { classId: string; clientId?: string; cmd: string }) => {
       const response = await apiRequest("POST", "/api/command", data);
       return response.json();
     },
@@ -48,6 +56,7 @@ function CommandForm() {
       });
       setCommandText("");
       setSelectedClassId("");
+      setSelectedClientId("");
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ["/api/activity-log"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
@@ -74,12 +83,18 @@ function CommandForm() {
 
     commandMutation.mutate({
       classId: selectedClassId,
+      clientId: selectedClientId || undefined,
       cmd: commandText.trim(),
     });
   };
 
   const insertQuickCommand = (command: string) => {
     setCommandText(command);
+  };
+
+  const handleClassIdChange = (value: string) => {
+    setSelectedClassId(value);
+    setSelectedClientId(""); // Reset client selection when class changes
   };
 
   return (
@@ -102,7 +117,7 @@ function CommandForm() {
             <Label className="block text-sm font-medium text-gray-700 mb-2">
               Target Class ID
             </Label>
-            <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+            <Select value={selectedClassId} onValueChange={handleClassIdChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Select Class ID" />
               </SelectTrigger>
@@ -110,6 +125,28 @@ function CommandForm() {
                 {ALLOWED_CLASS_IDS.map((classId) => (
                   <SelectItem key={classId} value={classId}>
                     {classId}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label className="block text-sm font-medium text-gray-700 mb-2">
+              Target Client {selectedClassId && "(Optional)"}
+            </Label>
+            <Select
+              value={selectedClientId}
+              onValueChange={setSelectedClientId}
+              disabled={!selectedClassId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={selectedClassId ? "All Clients" : "Select Class ID first"} />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredClients.map((client) => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.hostname} ({client.ip})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -135,10 +172,12 @@ function CommandForm() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-2">
+          <div className="flex items-center justify-between pt-2 gap-10">
             <div className="text-xs text-gray-500 flex items-center">
               <Info className="w-3 h-3 mr-1" />
-              Commands sent via POST /api/command
+              {selectedClientId 
+                ? "Command will be sent to selected client only"
+                : "Command will be sent to all clients in class"}
             </div>
             <Button
               type="submit"

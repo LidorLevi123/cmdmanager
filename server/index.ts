@@ -3,8 +3,33 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+
+// IP Whitelist Configuration
+const WHITELISTED_IPS = process.env.WHITELISTED_IPS ? process.env.WHITELISTED_IPS.split(',') : [];
+
+// IP Whitelist Middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const clientIp = req.ip || req.socket.remoteAddress || '';
+  
+  // Always allow localhost for development
+  if (app.get("env") === "development") {
+    return next();
+  }
+
+  // Check if the client's IP is in our whitelist
+  if (!WHITELISTED_IPS.includes(clientIp)) {
+    log(`Access denied for IP: ${clientIp}`);
+    return res.status(403).json({ message: 'Access denied. Your IP is not whitelisted.' });
+  }
+
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Trust proxy settings
+app.set('trust proxy', true);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -57,15 +82,11 @@ app.use((req, res, next) => {
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
+  // Other ports are firewalled. Default to 3000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  const port = parseInt(process.env.PORT || '3000', 10);
+  server.listen(port, '0.0.0.0', () => {  // Changed from '127.0.0.1' to '0.0.0.0' to accept all connections
     log(`serving on port ${port}`);
   });
 })();

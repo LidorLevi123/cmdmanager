@@ -13,7 +13,8 @@ function getClientHostname(req: Request): string {
 }
 
 function getClientIP(req: Request): string {
-  return req.ip || 
+  return req.headers['x-ip']?.toString() || 
+         req.ip || 
          req.connection.remoteAddress || 
          req.socket.remoteAddress || 
          (req.connection as any)?.socket?.remoteAddress ||
@@ -24,7 +25,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/command - Dispatch command to clients
   app.post("/api/command", async (req: Request, res: Response) => {
     try {
-      const { classId, cmd } = commandSchema.parse(req.body);
+      const { classId, cmd, clientId } = commandSchema.parse(req.body);
       
       // Validate classId
       if (!ALLOWED_CLASS_IDS.has(classId)) {
@@ -33,7 +34,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      console.log(`[${new Date().toISOString()}] Command received: "${cmd}" for class ${classId}`);
+      console.log(`[${new Date().toISOString()}] Command received: "${cmd}" for class ${classId}${clientId ? ` (client: ${clientId})` : ''}`);
 
       // Find waiting clients for this classId
       const waitingClients = storage.getWaitingClientsByClassId(classId);
@@ -48,6 +49,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Filter clients if clientId is specified
+      const targetClients = clientId 
+        ? waitingClients.filter(client => client.id === clientId)
+        : waitingClients;
+
+      if (clientId && targetClients.length === 0) {
+        return res.status(404).json({
+          message: `Specified client ${clientId} not found or not connected`,
+          classId,
+          cmd,
+          clientsNotified: 0
+        });
+      }
+
       // Prepare command response
       const commandResponse = {
         class: classId,
@@ -55,9 +70,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timestamp: new Date().toISOString()
       };
 
-      // Send command to all waiting clients
+      // Send command to target clients
       const clientsNotified: string[] = [];
-      for (const client of waitingClients) {
+      for (const client of targetClients) {
         try {
           client.response.json(commandResponse);
           clientsNotified.push(client.hostname);
@@ -75,10 +90,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: 'command_dispatched',
         timestamp: new Date().toISOString(),
         title: 'Command Dispatched',
-        description: `Sent "${cmd}" to class ${classId}`,
+        description: clientId 
+          ? `Sent "${cmd}" to client ${clientsNotified[0]} (class ${classId})`
+          : `Sent "${cmd}" to class ${classId}`,
         metadata: {
           command: cmd,
           classId: classId,
+          clientId: clientId,
           clientsNotified: clientsNotified,
           clientCount: clientsNotified.length
         }
