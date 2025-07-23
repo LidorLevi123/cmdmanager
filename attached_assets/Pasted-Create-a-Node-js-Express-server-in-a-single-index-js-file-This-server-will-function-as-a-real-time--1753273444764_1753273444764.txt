@@ -1,0 +1,37 @@
+Create a Node.js Express server in a single index.js file. This server will function as a real-time command dispatcher for a fleet of clients using a long-polling architecture. All application state, such as the list of waiting clients, should be managed in-memory without a database.
+
+The server must implement two specific endpoints:
+
+1. A POST endpoint at /command
+
+Purpose: This endpoint is for an administrator or "main laptop" to submit a new command to be executed by clients.
+
+Input: It must accept a JSON body containing classId (string) and cmd (string).
+
+Validation: It should check if the provided classId exists in a predefined Set of allowed classes (e.g., '58.0.6', '58.1.1', '58.-1.23').
+
+Core Logic:
+
+Upon receiving a valid command, it must immediately search the in-memory list of "waiting clients".
+
+For every waiting client whose classId matches the one in the command, it should send a response back to that client's long-held request. The response body should be a JSON object containing the command details: { class: classId, cmd: cmd, timestamp: new Date().toISOString() }.
+
+After successfully sending the command to the relevant clients, it must remove them from the waiting list.
+
+Finally, it should respond to the original POST request with a status 202 (Accepted) and a confirmation message.
+
+2. A GET endpoint at /get-command-long-poll/:classId
+
+Purpose: This is the long-polling endpoint that client laptops will connect to.
+
+Logic:
+
+When a client connects, the server should add its response object and classId to an in-memory array of waiting clients.
+
+Crucially, the server must hold the connection open and not send a response right away.
+
+The connection should only be fulfilled when a relevant command is posted to the /command endpoint.
+
+The server must also handle client disconnections gracefully (e.g., using the req.on('close', ...) event) by removing the disconnected client from the waiting list to prevent memory leaks.
+
+Please include clear console.log statements to show when clients connect, when they disconnect, when a command is received, and when a command is dispatched. The server should listen on the port provided by the environment or default to port 3000.
