@@ -4,28 +4,41 @@ import { Terminal, Send, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
-const ALLOWED_CLASS_IDS = ['58.0.6', '58.1.1', '58.-1.23', '58.0.8', '58.1.3', '58.-1.25'];
+const ALLOWED_CLASS_IDS = [
+  "58.-1.23",
+  "58.-1.25",
+  "58.0.6",
+  "58.0.8",
+  "58.1.1",
+  "58.1.3",
+];
 const QUICK_COMMANDS = [
-  { label: 'System Info', command: 'systeminfo' },
-  { label: 'IP Config', command: 'ipconfig' },
-  { label: 'Restart', command: 'restart' },
-  { label: 'Ping Test', command: 'ping google.com' },
+  { label: "System Info", command: "systeminfo" },
+  { label: "IP Config", command: "ipconfig" },
+  { label: "Restart", command: "restart" },
+  { label: "Ping Test", command: "ping google.com" },
 ];
 
 function CommandForm() {
-  const [selectedClassId, setSelectedClassId] = useState('');
-  const [commandText, setCommandText] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState("");
+  const [commandText, setCommandText] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const commandMutation = useMutation({
     mutationFn: async (data: { classId: string; cmd: string }) => {
-      const response = await apiRequest('POST', '/api/command', data);
+      const response = await apiRequest("POST", "/api/command", data);
       return response.json();
     },
     onSuccess: (data) => {
@@ -33,11 +46,11 @@ function CommandForm() {
         title: "Command Dispatched",
         description: `Sent to ${data.clientsNotified} clients successfully`,
       });
-      setCommandText('');
-      setSelectedClassId('');
+      setCommandText("");
+      setSelectedClassId("");
       // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: ['/api/activity-log'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activity-log"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
     },
     onError: (error) => {
       toast({
@@ -77,7 +90,9 @@ function CommandForm() {
             <Terminal className="text-primary w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Send Command</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Send Command
+            </h2>
             <p className="text-sm text-gray-500">Dispatch to client fleet</p>
           </div>
         </div>
@@ -125,20 +140,22 @@ function CommandForm() {
               <Info className="w-3 h-3 mr-1" />
               Commands sent via POST /api/command
             </div>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={commandMutation.isPending}
               className="bg-primary hover:bg-blue-600"
             >
               <Send className="w-4 h-4 mr-2" />
-              {commandMutation.isPending ? 'Dispatching...' : 'Dispatch'}
+              {commandMutation.isPending ? "Dispatching..." : "Dispatch"}
             </Button>
           </div>
         </form>
 
         {/* Quick Actions */}
         <div className="mt-6 pt-6 border-t border-gray-100">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">Quick Commands</h3>
+          <h3 className="text-sm font-medium text-gray-700 mb-3">
+            Quick Commands
+          </h3>
           <div className="grid grid-cols-2 gap-2">
             {QUICK_COMMANDS.map((item) => (
               <Button
