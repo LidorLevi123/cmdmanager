@@ -55,12 +55,17 @@ LogMessage "Server: " & serverURL & ", Class: " & classID
 LogMessage "Hostname: " & hostname & ", IP: " & ipAddress
 
 ' Test server connectivity
+LogMessage "Testing connection to server: " & serverURL
 If Not TestServerConnection() Then
     LogMessage "ERROR: Cannot connect to server " & serverURL
-    WScript.Quit 1
+    LogMessage "Please check: 1) Server is running 2) Network connectivity 3) Firewall settings"
+    ' Don't quit immediately, try to continue - server might be temporarily down
+    LogMessage "Continuing anyway - will retry connections..."
+Else
+    LogMessage "Server connection verified successfully"
 End If
 
-LogMessage "Server connection verified, starting main loop"
+LogMessage "Starting main polling loop..."
 
 ' Main connection loop
 Dim reconnectCount

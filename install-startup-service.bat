@@ -133,21 +133,35 @@ echo Current configuration:
 type "%INSTALL_DIR%\client-config.txt" | findstr /v "^#" | findstr /v "^$"
 echo.
 
-:: Test if VBScript can run
-echo Testing VBScript execution...
-wscript.exe //NoLogo "%INSTALL_DIR%\start-hidden-client.vbs" &
+:: Start VBScript client in background
+echo Starting Command Dispatcher Client...
+start /B wscript.exe //NoLogo "%INSTALL_DIR%\start-hidden-client.vbs"
 
-:: Wait a moment for it to start
-timeout /t 3 /nobreak >nul
+:: Wait a moment for it to initialize
+timeout /t 5 /nobreak >nul
 
-:: Check if process started
-tasklist /FI "IMAGENAME eq wscript.exe" | findstr "wscript.exe" >nul 2>&1
-if %errorlevel% == 0 (
-    echo     SUCCESS: Client started and running in background
-    echo     Process: wscript.exe is running
+:: Check if process started and log file was created
+tasklist /FI "IMAGENAME eq wscript.exe" /FO CSV | find "wscript.exe" >nul 2>&1
+set PROCESS_RUNNING=%errorlevel%
+
+:: Check if log file was created (indicates client started successfully)
+if exist "%INSTALL_DIR%\Logs\*.log" (
+    set LOG_CREATED=0
 ) else (
-    echo     WARNING: Could not verify client startup
-    echo     Please check logs in %INSTALL_DIR%\Logs\ for details
+    set LOG_CREATED=1
+)
+
+if %PROCESS_RUNNING% == 0 (
+    echo     SUCCESS: Client process started (wscript.exe running)
+    if %LOG_CREATED% == 0 (
+        echo     SUCCESS: Log file created - client is connecting
+        echo     Check latest log file for connection status
+    ) else (
+        echo     INFO: Waiting for log file creation...
+    )
+) else (
+    echo     WARNING: Could not detect wscript.exe process
+    echo     The client may still be starting up
 )
 
 echo.
