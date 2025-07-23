@@ -1,35 +1,40 @@
 # Command Dispatcher Client Setup Guide
 
-## 🚀 Quick Setup for Student PCs (Hidden Mode)
+## 🚀 Portable Installation for Student PCs (Hidden Mode)
 
-This guide shows you how to set up the Command Dispatcher Client to run automatically at startup with no visible windows.
+This is a complete portable solution that can be run from desktop, USB drive, or any location to set up hidden client polling.
 
-## 📁 Files Included
+## 📁 Files Needed (Portable Package)
 
-- `client-connector-silent.bat` - Hidden background client
-- `start-hidden-client.vbs` - VBScript launcher (no visible windows)
-- `install-startup-service.bat` - Automatic installer
+- `start-hidden-client.vbs` - Complete hidden client (no visible windows)
+- `install-startup-service.bat` - One-click portable installer
 - `client-config.txt` - Configuration file
-- `uninstall.bat` - Removal tool (created during installation)
+- `test-connection.bat` - Connection tester (optional)
 
-## 🔧 Installation Steps
+## 🔧 Simple Installation Process
 
-### Step 1: Configure Settings
-1. Edit `client-config.txt` with your server details:
-   ```
-   SERVER_URL=http://your-server-ip:5000
-   CLASS_ID=58.0.6
-   ```
+### Step 1: Configure Your Server Settings
+Edit `client-config.txt` with your server details:
+```
+SERVER_URL=http://your-server-ip:5000
+CLASS_ID=58.0.6
+```
 
-### Step 2: Install as Startup Service
-1. **Right-click** on `install-startup-service.bat`
-2. Select **"Run as administrator"**
-3. Follow the on-screen prompts
-4. The installer will:
-   - Copy files to `C:\CommandDispatcher\`
-   - Set up automatic startup
-   - Create logs directory
-   - Offer to start immediately
+### Step 2: Run the Portable Installer
+1. Place all files in any location (desktop, USB drive, etc.)
+2. **Right-click** on `install-startup-service.bat`
+3. Select **"Run as administrator"**
+4. The installer automatically:
+   - Creates `C:\CommandDispatcher\` directory
+   - Copies all files from current location
+   - Sets up automatic Windows startup
+   - Starts the client immediately
+   - Creates uninstaller and logs directory
+
+### Step 3: Verify Installation
+- Installer shows "SUCCESS: Client started and running in background"
+- Check Task Manager for `wscript.exe` process
+- View logs in `C:\CommandDispatcher\Logs\`
 
 ### Step 3: Verify Installation
 - Check logs in: `C:\CommandDispatcher\Logs\`
