@@ -5,6 +5,47 @@ import helmet from "helmet";
 
 const app = express();
 
+// IP Whitelist Configuration
+const WHITELISTED_IPS = process.env.WHITELISTED_IPS ? process.env.WHITELISTED_IPS.split(',') : [];
+
+// Function to get client IP
+function getClientIp(req: Request): string {
+  // Get the X-Forwarded-For header value if exists
+  const forwardedFor = req.headers['x-forwarded-for'];
+  const forwardedIp = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor?.split(',')[0];
+  
+  // Get direct connection IP
+  const directIp = req.socket.remoteAddress;
+  
+  // Log both IPs for debugging
+  const timestamp = new Date().toISOString();
+  log(`[${timestamp}] Request IPs - Forwarded: ${forwardedIp || 'none'}, Direct: ${directIp || 'none'}`);
+  
+  // Return the most likely real client IP
+  return (forwardedIp || directIp || '').trim();
+}
+
+// IP Whitelist Middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  // Always allow localhost for development
+  if (app.get("env") === "development") {
+    return next();
+  }
+
+  const clientIp = getClientIp(req);
+  
+  // Check if the client's IP is in our whitelist
+  if (!WHITELISTED_IPS.includes(clientIp)) {
+    log(`Access denied for IP: ${clientIp} (Whitelist: ${WHITELISTED_IPS.join(', ')})`);
+    return res.status(403).json({ 
+      message: 'Access denied. Your IP is not whitelisted.',
+      yourIp: clientIp // Return the IP we detected for debugging
+    });
+  }
+
+  next();
+});
+
 // Security headers in production
 if (app.get("env") === "production") {
   app.use(helmet());
@@ -17,27 +58,6 @@ if (app.get("env") === "production") {
     next();
   });
 }
-
-// IP Whitelist Configuration
-const WHITELISTED_IPS = process.env.WHITELISTED_IPS ? process.env.WHITELISTED_IPS.split(',') : [];
-
-// IP Whitelist Middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const clientIp = req.ip || req.socket.remoteAddress || '';
-  
-  // Always allow localhost for development
-  if (app.get("env") === "development") {
-    return next();
-  }
-
-  // Check if the client's IP is in our whitelist
-  if (!WHITELISTED_IPS.includes(clientIp)) {
-    log(`Access denied for IP: ${clientIp}`);
-    return res.status(403).json({ message: 'Access denied. Your IP is not whitelisted.' });
-  }
-
-  next();
-});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));

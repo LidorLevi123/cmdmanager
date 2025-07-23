@@ -16,6 +16,9 @@ export interface IStorage {
   removeWaitingClient(clientId: string): void;
   getWaitingClientsByClassId(classId: string): WaitingClient[];
   getAllWaitingClients(): WaitingClient[];
+  getWaitingClientById(clientId: string): WaitingClient | undefined;
+  getWaitingClientByHostname(hostname: string): WaitingClient | undefined;
+  updateClientClass(clientId: string, newClass: string): void;
   
   // Activity log
   addActivityLogEntry(entry: Omit<ActivityLogEntry, 'id'>): void;
@@ -53,6 +56,20 @@ export class MemStorage implements IStorage {
         endpoints: ['POST /api/command', 'GET /api/get-command-long-poll/:classId']
       }
     });
+  }
+
+  updateClientClass(clientId: string, newClass: string): void {
+    const client = this.waitingClients.get(clientId);
+    console.log(client?.classId);
+    if (client) {
+      client.classId = newClass;
+      
+      this.waitingClients.set(clientId, client);
+      console.log('here2');
+      
+      console.log(`[${new Date().toISOString()}] Updated client ${client.hostname} class to ${newClass} in storage`);
+      console.log('🚀 ~ MemStorage ~ updateClientClass ~ this.waitingClients:', this.waitingClients)
+    }
   }
 
   addWaitingClient(client: WaitingClient): void {
@@ -101,6 +118,16 @@ export class MemStorage implements IStorage {
 
   getAllWaitingClients(): WaitingClient[] {
     return Array.from(this.waitingClients.values());
+  }
+
+  getWaitingClientById(clientId: string): WaitingClient | undefined {
+    return this.waitingClients.get(clientId);
+  }
+
+  getWaitingClientByHostname(hostname: string): WaitingClient | undefined {
+    return Array.from(this.waitingClients.values()).find(
+      client => client.hostname === hostname
+    );
   }
 
   addActivityLogEntry(entry: Omit<ActivityLogEntry, 'id'>): void {

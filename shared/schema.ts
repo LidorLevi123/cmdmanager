@@ -33,7 +33,7 @@ export type CommandResponse = z.infer<typeof commandResponseSchema>;
 // Activity log entry schema
 export const activityLogEntrySchema = z.object({
   id: z.string(),
-  type: z.enum(['command_dispatched', 'client_connected', 'client_disconnected', 'server_started']),
+  type: z.enum(['command_dispatched', 'client_connected', 'client_disconnected', 'server_started', 'class_changed']),
   timestamp: z.string(),
   title: z.string(),
   description: z.string(),

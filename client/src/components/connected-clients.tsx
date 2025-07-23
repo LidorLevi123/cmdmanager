@@ -1,10 +1,11 @@
-import { Monitor, RefreshCw, Search } from "lucide-react";
+import { Monitor, RefreshCw, Search, MoreVertical } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useClients } from "@/hooks/use-clients";
+import { useClients, useChangeClientClass } from "@/hooks/use-clients";
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
+import { ALLOWED_CLASS_IDS } from "@shared/schema";
 import {
   Select,
   SelectContent,
@@ -12,6 +13,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
 
 const SORT_OPTIONS = [
   { value: "newest", label: "Newest First" },
@@ -22,15 +37,25 @@ const SORT_OPTIONS = [
 
 function ConnectedClients() {
   const { data: clients = [], isLoading, refetch } = useClients();
+  const changeClass = useChangeClientClass();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClass, setSelectedClass] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
+  const [changeClassDialog, setChangeClassDialog] = useState<{
+    isOpen: boolean;
+    clientId: string;
+    currentClass: string;
+  }>({ isOpen: false, clientId: "", currentClass: "" });
 
   // Get unique class IDs from clients
   const uniqueClassIds = useMemo(() => {
     const classIds = new Set(clients.map(client => client.classId));
     return Array.from(classIds).sort();
   }, [clients]);
+
+  // Get all available classes
+  const availableClasses = useMemo(() => Array.from(ALLOWED_CLASS_IDS).sort(), []);
 
   // Filter and sort clients
   const filteredAndSortedClients = useMemo(() => {
@@ -70,6 +95,29 @@ function ConnectedClients() {
     return filtered;
   }, [clients, selectedClass, searchQuery, sortBy]);
 
+  const handleChangeClass = async (newClass: string) => {
+    if (changeClass.isPending) return; // Prevent multiple attempts while loading
+
+    try {
+      await changeClass.mutateAsync({
+        clientId: changeClassDialog.clientId,
+        newClass,
+        currentClass: changeClassDialog.currentClass
+      });
+      toast({
+        title: "Success",
+        description: "Client class update command sent successfully. The client will reconnect shortly.",
+      });
+      setChangeClassDialog({ isOpen: false, clientId: "", currentClass: "" });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update client class.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <Card className="h-[auto] max-h-[800px] flex flex-col">
       <div className="p-6 border-b border-gray-100 flex-none">
@@ -80,7 +128,9 @@ function ConnectedClients() {
             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Connected Clients</h2>
-              <p className="text-sm text-gray-500">Long-polling connections</p>
+              <p className="text-sm text-gray-500">
+                {filteredAndSortedClients.length} {filteredAndSortedClients.length === 1 ? 'result' : 'results'} found
+              </p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
@@ -159,7 +209,7 @@ function ConnectedClients() {
             {filteredAndSortedClients.map((client) => (
               <div
                 key={client.id}
-                className="bg-gray-50 rounded-lg p-4 border border-gray-200"
+                className="bg-gray-50 rounded-lg p-4 border border-gray-200 relative group"
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-3">
@@ -186,6 +236,34 @@ function ConnectedClients() {
                     <span className="font-mono">{client.ip}</span>
                   </div>
                 </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 absolute -top-0 -right-0 opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() =>
+                        setChangeClassDialog({
+                          isOpen: true,
+                          clientId: client.id,
+                          currentClass: client.classId,
+                        })
+                      }
+                      className="cursor-pointer"
+                    >
+                      Edit Class
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled className="cursor-not-allowed">
+                      Remove
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             ))}
           </div>
@@ -203,6 +281,48 @@ function ConnectedClients() {
           </div>
         )}
       </CardContent>
+
+      <Dialog
+        open={changeClassDialog.isOpen}
+        onOpenChange={(isOpen) =>
+          !changeClass.isPending && setChangeClassDialog((prev) => ({ ...prev, isOpen }))
+        }
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Class</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Select
+              onValueChange={handleChangeClass}
+              defaultValue={changeClassDialog.currentClass}
+              disabled={changeClass.isPending}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select new class" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableClasses.map((classId) => (
+                  <SelectItem key={classId} value={classId}>
+                    {classId}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setChangeClassDialog({ isOpen: false, clientId: "", currentClass: "" })
+              }
+              disabled={changeClass.isPending}
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

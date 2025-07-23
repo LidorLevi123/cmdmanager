@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage, WaitingClient } from "./storage";
 import { commandSchema, ALLOWED_CLASS_IDS } from "@shared/schema";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 
 function getClientHostname(req: Request): string {
   // Try to get hostname from headers, fallback to generating one
@@ -34,7 +35,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      console.log(`[${new Date().toISOString()}] Command received: "${cmd}" for class ${classId}${clientId ? ` (client: ${clientId})` : ''}`);
+      console.log(`[${new Date().toISOString()}] Command received:
+        Command: "${cmd}"
+        Class: ${classId}
+        Client: ${clientId || 'all'}
+        Body: ${JSON.stringify(req.body, null, 2)}
+      `);
 
       // Find waiting clients for this classId
       const waitingClients = storage.getWaitingClientsByClassId(classId);
@@ -55,6 +61,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : waitingClients;
 
       if (clientId && targetClients.length === 0) {
+        console.log(`[${new Date().toISOString()}] Client ${clientId} not found in waiting clients for class ${classId}`);
         return res.status(404).json({
           message: `Specified client ${clientId} not found or not connected`,
           classId,
@@ -70,14 +77,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timestamp: new Date().toISOString()
       };
 
+      console.log(`[${new Date().toISOString()}] Sending command response:
+        ${JSON.stringify(commandResponse, null, 2)}
+        To clients: ${targetClients.map(c => `${c.hostname} (${c.ip})`).join(', ')}
+      `);
+
       // Send command to target clients
       const clientsNotified: string[] = [];
       for (const client of targetClients) {
         try {
+          // If this is a class change command, update the class in storage first
+          if (cmd.includes('echo') && cmd.includes('class.txt')) {
+            const newClass = cmd.split('echo ')[1].split(' >')[0].trim();
+            storage.updateClientClass(client.id, newClass);
+          }
+
+          // Send the command
           client.response.json(commandResponse);
           clientsNotified.push(client.hostname);
           storage.removeWaitingClient(client.id);
-          console.log(`[${new Date().toISOString()}] Command dispatched to ${client.hostname} (${client.ip})`);
+          console.log(`[${new Date().toISOString()}] Command sent to ${client.hostname} (${client.ip})`);
         } catch (error) {
           console.error(`[${new Date().toISOString()}] Failed to send command to ${client.hostname}: ${error}`);
           storage.removeWaitingClient(client.id);
@@ -131,11 +150,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
 
-    const clientId = nanoid();
+    const clientId = req.headers['x-client-id']?.toString() || nanoid();
     const hostname = getClientHostname(req);
     const ip = getClientIP(req);
 
     console.log(`[${new Date().toISOString()}] Long-polling connection established: ${hostname} (${ip}) for class ${classId}`);
+
+    // If this client was previously connected with a different class, log the change
+    const existingClient = storage.getWaitingClientByHostname(hostname);
+    if (existingClient && existingClient.classId !== classId) {
+      console.log(`[${new Date().toISOString()}] Client ${hostname} reconnected with new class: ${classId} (was: ${existingClient.classId})`);
+      
+      // Remove the old connection if it exists
+      storage.removeWaitingClient(existingClient.id);
+    }
 
     // Create waiting client
     const waitingClient: WaitingClient = {
@@ -203,6 +231,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/stats", (req: Request, res: Response) => {
     const stats = storage.getStats();
     res.json(stats);
+  });
+
+  // POST /api/clients/:clientId/change-class - Change client class
+  app.post("/api/clients/:clientId/change-class", async (req: Request, res: Response) => {
+    try {
+      const { clientId } = req.params;
+      const schema = z.object({ newClass: z.string() });
+      const { newClass } = schema.parse(req.body);
+
+      // Validate newClass
+      if (!ALLOWED_CLASS_IDS.has(newClass)) {
+        return res.status(400).json({ 
+          message: `Invalid class. Allowed values: ${Array.from(ALLOWED_CLASS_IDS).join(', ')}` 
+        });
+      }
+
+      // Find the client
+      const client = storage.getWaitingClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      // Update the client's class
+      const oldClass = client.classId;
+      client.classId = newClass;
+
+      // Send command to update class.txt
+      const updateCommand = `echo ${newClass} > C:\\cmdmanager\\class.txt`;
+      
+      // Prepare command response
+      const commandResponse = {
+        class: oldClass, // Use old class since client hasn't updated yet
+        cmd: updateCommand,
+        timestamp: new Date().toISOString()
+      };
+
+      // Send command to client
+      try {
+        client.response.json(commandResponse);
+        storage.removeWaitingClient(clientId);
+        console.log(`[${new Date().toISOString()}] Class update command sent to ${client.hostname} (${client.ip})`);
+        
+        // Update stats
+        storage.incrementCommandsDispatched();
+        
+        // Log command dispatch
+        storage.addActivityLogEntry({
+          type: 'command_dispatched',
+          timestamp: new Date().toISOString(),
+          title: 'Class Update Command Dispatched',
+          description: `Sent class update command to ${client.hostname}`,
+          metadata: {
+            command: updateCommand,
+            clientId,
+            hostname: client.hostname,
+            oldClass,
+            newClass
+          }
+        });
+      } catch (error) {
+        console.error(`[${new Date().toISOString()}] Failed to send class update command to ${client.hostname}: ${error}`);
+        storage.removeWaitingClient(clientId);
+        return res.status(500).json({ message: "Failed to send class update command to client" });
+      }
+
+      // Log the class change
+      storage.addActivityLogEntry({
+        type: 'class_changed',
+        timestamp: new Date().toISOString(),
+        title: 'Client Class Changed',
+        description: `Changed class for ${client.hostname} from ${oldClass} to ${newClass}`,
+        metadata: {
+          clientId,
+          hostname: client.hostname,
+          oldClass,
+          newClass
+        }
+      });
+
+      res.json({ 
+        message: "Client class updated successfully",
+        client: {
+          id: client.id,
+          hostname: client.hostname,
+          classId: client.classId,
+          ip: client.ip
+        }
+      });
+
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] Error changing client class:`, error);
+      res.status(400).json({ 
+        message: error instanceof Error ? error.message : "Invalid request" 
+      });
+    }
   });
 
   const httpServer = createServer(app);
