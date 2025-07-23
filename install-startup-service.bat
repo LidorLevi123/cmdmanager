@@ -31,7 +31,6 @@ if not exist "%INSTALL_DIR%" (
 
 echo.
 echo [2/5] Copying client files...
-copy "client-connector-silent.bat" "%INSTALL_DIR%\client-connector-silent.bat" >nul
 copy "start-hidden-client.vbs" "%INSTALL_DIR%\start-hidden-client.vbs" >nul
 copy "client-config.txt" "%INSTALL_DIR%\client-config.txt" >nul
 echo     Files copied to %INSTALL_DIR%
