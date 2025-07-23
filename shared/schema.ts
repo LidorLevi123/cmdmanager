@@ -52,4 +52,4 @@ export const serverStatsSchema = z.object({
 export type ServerStats = z.infer<typeof serverStatsSchema>;
 
 // Predefined allowed class IDs
-export const ALLOWED_CLASS_IDS = new Set(['58.0.6', '58.1.1', '58.-1.23']);
+export const ALLOWED_CLASS_IDS = new Set(['58.0.6', '58.1.1', '58.-1.23', '58.0.8', '58.1.3', '58.-1.25']);

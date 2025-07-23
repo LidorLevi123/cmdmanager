@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
-const ALLOWED_CLASS_IDS = ['58.0.6', '58.1.1', '58.-1.23'];
+const ALLOWED_CLASS_IDS = ['58.0.6', '58.1.1', '58.-1.23', '58.0.8', '58.1.3', '58.-1.25'];
 const QUICK_COMMANDS = [
   { label: 'System Info', command: 'systeminfo' },
   { label: 'IP Config', command: 'ipconfig' },
