@@ -1,8 +1,22 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import helmet from "helmet";
 
 const app = express();
+
+// Security headers in production
+if (app.get("env") === "production") {
+  app.use(helmet());
+  
+  // Force HTTPS in production
+  app.use((req, res, next) => {
+    if (req.headers['x-forwarded-proto'] !== 'https') {
+      return res.redirect(['https://', req.get('Host'), req.url].join(''));
+    }
+    next();
+  });
+}
 
 // IP Whitelist Configuration
 const WHITELISTED_IPS = process.env.WHITELISTED_IPS ? process.env.WHITELISTED_IPS.split(',') : [];
