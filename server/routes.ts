@@ -4,6 +4,7 @@ import { storage, WaitingClient } from "./storage";
 import { commandSchema, ALLOWED_CLASS_IDS } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { ipWhitelistMiddleware } from "./index";
 
 function getClientHostname(req: Request): string {
   // Try to get hostname from headers, fallback to generating one
@@ -24,7 +25,7 @@ function getClientIP(req: Request): string {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/command - Dispatch command to clients
-  app.post("/api/command", async (req: Request, res: Response) => {
+  app.post("/api/command", ipWhitelistMiddleware, async (req: Request, res: Response) => {
     try {
       const { classId, cmd, clientId } = commandSchema.parse(req.body);
       
@@ -194,7 +195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/clients - Get connected clients
-  app.get("/api/clients", (req: Request, res: Response) => {
+  app.get("/api/clients", ipWhitelistMiddleware, (req: Request, res: Response) => {
     const waitingClients = storage.getAllWaitingClients();
     const connectedClients = waitingClients.map(client => {
       const now = new Date();
@@ -216,25 +217,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/activity-log - Get activity log
-  app.get("/api/activity-log", (req: Request, res: Response) => {
+  app.get("/api/activity-log", ipWhitelistMiddleware, (req: Request, res: Response) => {
     const activityLog = storage.getActivityLog();
     res.json(activityLog);
   });
 
   // DELETE /api/activity-log - Clear activity log
-  app.delete("/api/activity-log", (req: Request, res: Response) => {
+  app.delete("/api/activity-log", ipWhitelistMiddleware, (req: Request, res: Response) => {
     storage.clearActivityLog();
     res.json({ message: "Activity log cleared" });
   });
 
   // GET /api/stats - Get server statistics
-  app.get("/api/stats", (req: Request, res: Response) => {
+  app.get("/api/stats", ipWhitelistMiddleware, (req: Request, res: Response) => {
     const stats = storage.getStats();
     res.json(stats);
   });
 
   // POST /api/clients/:clientId/change-class - Change client class
-  app.post("/api/clients/:clientId/change-class", async (req: Request, res: Response) => {
+  app.post("/api/clients/:clientId/change-class", ipWhitelistMiddleware, async (req: Request, res: Response) => {
     try {
       const { clientId } = req.params;
       const schema = z.object({ newClass: z.string() });

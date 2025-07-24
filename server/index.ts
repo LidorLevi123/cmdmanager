@@ -26,7 +26,7 @@ function getClientIp(req: Request): string {
 }
 
 // IP Whitelist Middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
+export function ipWhitelistMiddleware(req: Request, res: Response, next: NextFunction) {
   // Always allow localhost for development
   if (app.get("env") === "development") {
     return next();
@@ -44,7 +44,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   }
 
   next();
-});
+}
 
 // Security headers in production
 if (app.get("env") === "production") {
