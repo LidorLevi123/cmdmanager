@@ -20,11 +20,19 @@ function getClientIP(req: Request): string {
   return (forwardedIp || directIp || '').trim();
 }
 
+// Function to check if request is from OnRender
+function isOnRenderRequest(req: Request): boolean {
+  // OnRender sets these headers
+  const isOnRender = req.headers['x-forwarded-proto'] === 'https' && 
+                    req.headers.host?.endsWith('.onrender.com') === true;
+  return isOnRender;
+}
+
 // IP Whitelist Middleware
 const ipWhitelistMiddleware = (req: Request, res: Response, next: Function) => {
   // Get whitelisted IPs from environment variable
   const defaultIPs = process.env.NODE_ENV === 'production' 
-    ? []
+    ? [] // No default IPs in production, we'll check OnRender headers instead
     : ['127.0.0.1', '::1']; // Local development IPs
 
   const WHITELISTED_IPS = process.env.WHITELISTED_IPS 
@@ -39,17 +47,20 @@ const ipWhitelistMiddleware = (req: Request, res: Response, next: Function) => {
   // Get the real client IP from X-Forwarded-For since we're behind a load balancer
   const clientIp = getClientIP(req);
   
-  // Check if the client's IP is in our whitelist
-  if (!WHITELISTED_IPS.includes(clientIp)) {
-    console.log(`[${new Date().toISOString()}] Access denied for IP: ${clientIp} (Whitelist: ${WHITELISTED_IPS.join(', ')})`);
-    return res.status(403).json({ 
-      message: 'Access denied.',
-      yourIp: clientIp, // Return the IP we detected for debugging
-      environment: process.env.NODE_ENV
-    });
+  // Allow if it's a request from OnRender's infrastructure or a whitelisted IP
+  if (isOnRenderRequest(req) || WHITELISTED_IPS.includes(clientIp)) {
+    return next();
   }
 
-  next();
+  console.log(`[${new Date().toISOString()}] Access denied for IP: ${clientIp} (Whitelist: ${WHITELISTED_IPS.join(', ')})`);
+  console.log('Headers:', JSON.stringify(req.headers, null, 2)); // Log headers for debugging
+  
+  return res.status(403).json({ 
+    message: 'Access denied.',
+    yourIp: clientIp,
+    environment: process.env.NODE_ENV,
+    isOnRender: isOnRenderRequest(req)
+  });
 };
 
 // Frontend protection middleware - protects the main app
