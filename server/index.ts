@@ -16,6 +16,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.dirname(__dirname);
 
+// Get the correct dist path based on environment
+const getDistPath = () => {
+  if (process.env.NODE_ENV === 'production') {
+    // OnRender's project structure
+    return '/opt/render/project/src/client/dist';
+  }
+  // Local development
+  return path.join(rootDir, 'client', 'dist');
+};
+
 const app = express();
 
 // Security headers
@@ -91,8 +101,11 @@ app.use("/api", (req, res, next) => {
 
 // Serve static files in production
 if (process.env.NODE_ENV === "production") {
+  const distPath = getDistPath();
+  console.log(`Serving static files from: ${distPath}`);
+  
   // Serve only the dist folder's contents
-  app.use('/', express.static(path.join(rootDir, 'client', 'dist')));
+  app.use('/', express.static(distPath));
 
   // Handle React routing, but only for non-API routes
   app.get('/*', (req: Request, res: Response, next: Function) => {
@@ -101,7 +114,7 @@ if (process.env.NODE_ENV === "production") {
       return next();
     }
     // Only serve index.html from dist folder
-    res.sendFile(path.join(rootDir, 'client', 'dist', 'index.html'));
+    res.sendFile(path.join(distPath, 'index.html'));
   });
 }
 
