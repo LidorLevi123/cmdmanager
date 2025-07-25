@@ -1,12 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { Satellite, Server, TrendingUp } from "lucide-react";
+import { Satellite, Server, TrendingUp, LogOut } from "lucide-react";
 import CommandForm from "@/components/command-form";
 import ConnectedClients from "@/components/connected-clients";
 import ActivityLog from "@/components/activity-log";
 import { Card, CardContent } from "@/components/ui/card";
-import { ServerStats } from "@shared/schema";
+import { Button } from "@/components/ui/button";
+import type { ServerStats } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
 
 function Dashboard() {
+  const { user, logout } = useAuth();
   const { data: stats } = useQuery<ServerStats>({
     queryKey: ["/api/stats"],
     refetchInterval: 30000, // Refresh every 30 seconds
@@ -30,19 +33,36 @@ function Dashboard() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              {/* User Info */}
+              {user && (
+                <div className="flex items-center space-x-4">
+                  <span className="text-sm text-gray-600">
+                    Welcome, {user.fullName}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => logout.mutate()}
+                    disabled={logout.isPending}
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
               {/* Connection Status */}
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <span className="text-sm text-gray-600">Server Online</span>
               </div>
               <div className="text-sm text-gray-500">
-                Port: <span className="font-mono">5000</span>
+                Port: <span className="font-mono">3000</span>
               </div>
             </div>
           </div>
         </div>
       </header>
 
+      {/* Main content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Command Panel */}

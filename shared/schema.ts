@@ -54,3 +54,26 @@ export type ServerStats = z.infer<typeof serverStatsSchema>;
 
 // Predefined allowed class IDs
 export const ALLOWED_CLASS_IDS = new Set(['58.0.6', '58.1.1', '58.-1.23', '58.0.8', '58.1.3', '58.-1.25']);
+
+// Authentication schemas
+export const loginSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(8, "Password must be at least 8 characters")
+});
+
+export type LoginCredentials = z.infer<typeof loginSchema>;
+
+export interface User {
+  id: string;
+  username: string;
+  fullName: string;
+  role: string;
+  createdAt: string;
+  lastLogin: string | null;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  message: string;
+  user?: Omit<User, 'passwordHash'>;
+}

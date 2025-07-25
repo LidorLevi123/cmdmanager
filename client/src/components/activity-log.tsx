@@ -181,27 +181,29 @@ function ActivityLog() {
                             <RotateCw className={`w-4 h-4 mr-1 ${commandMutation.isPending ? 'animate-spin' : ''}`} />
                             Resend
                           </Button>
-                          {entry.metadata?.outputs && Object.keys(entry.metadata.outputs).length > 0 ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              onClick={() => setSelectedEntry(entry)}
-                            >
-                              <Eye className="w-4 h-4 mr-1" />
-                              View Output
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-gray-500"
-                              disabled
-                            >
-                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              Waiting...
-                            </Button>
-                          )}
+                          {(() => {
+                            return entry.metadata?.outputs && typeof entry.metadata.outputs === 'object' && Object.keys(entry.metadata.outputs).length > 0 ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                onClick={() => setSelectedEntry(entry)}
+                              >
+                                <Eye className="w-4 h-4 mr-1" />
+                                View Output
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-gray-500"
+                                disabled
+                              >
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                Waiting...
+                              </Button>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
@@ -224,10 +226,19 @@ function ActivityLog() {
       <Dialog.Root open={!!selectedEntry} onOpenChange={() => setSelectedEntry(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-          <Dialog.Content className="fixed left-[50%] top-[50%] z-50 grid w-auto max-w-[50vw] translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg">
+          <Dialog.Content 
+            className="fixed left-[50%] top-[50%] z-50 grid w-auto max-w-[50vw] translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg"
+            id="command-output-dialog"
+          >
             <Dialog.Title className="text-lg font-semibold leading-none tracking-tight">
               Command Output
             </Dialog.Title>
+            <Dialog.Description 
+              id="command-output-dialog-description"
+              className="sr-only"
+            >
+              View the output received from clients for the selected command
+            </Dialog.Description>
             <div className="py-4">
               <div className="bg-gray-50 p-4 rounded-lg space-y-4">
                 <div>
@@ -239,7 +250,7 @@ function ActivityLog() {
 
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-2">Outputs:</p>
-                  {selectedEntry?.metadata?.outputs ? (
+                  {selectedEntry?.metadata?.outputs && typeof selectedEntry.metadata.outputs === 'object' ? (
                     <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
                       {Object.entries(selectedEntry.metadata.outputs).map(([hostname, data]: [string, any]) => (
                         <div key={hostname} className="bg-white p-3 rounded border">

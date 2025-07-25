@@ -38,10 +38,19 @@ export function CommandModal({ open, onOpenChange, onSave, initialCommand }: Com
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <Dialog.Content className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg">
+        <Dialog.Content 
+          className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg"
+          id="quick-command-dialog"
+        >
           <Dialog.Title className="text-lg font-semibold leading-none tracking-tight">
             {initialCommand ? "Edit Quick Command" : "Add Quick Command"}
           </Dialog.Title>
+          <Dialog.Description 
+            id="quick-command-dialog-description"
+            className="sr-only"
+          >
+            {initialCommand ? "Edit an existing quick command's label and command" : "Create a new quick command with a label and command"}
+          </Dialog.Description>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="label">Label</Label>

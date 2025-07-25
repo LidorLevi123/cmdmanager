@@ -29,6 +29,16 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    proxy: {
+      "/api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
+    },
+    hmr: false, // Disable WebSocket connections
+    watch: {
+      usePolling: true, // Use polling instead of WebSocket
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],

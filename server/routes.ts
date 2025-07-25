@@ -23,25 +23,43 @@ function getClientIP(req: Request): string {
 // IP Whitelist Middleware
 const ipWhitelistMiddleware = (req: Request, res: Response, next: Function) => {
   // Get whitelisted IPs from environment variable
-  const WHITELISTED_IPS = process.env.WHITELISTED_IPS ? process.env.WHITELISTED_IPS.split(',') : [];
+  const WHITELISTED_IPS = process.env.WHITELISTED_IPS ? process.env.WHITELISTED_IPS.split(',').map(ip => ip.trim()) : [];
 
   // Always allow localhost for development
   if (process.env.NODE_ENV === "development") {
     return next();
   }
 
+  // Get the real client IP from X-Forwarded-For since we're behind a load balancer
   const clientIp = getClientIP(req);
   
   // Check if the client's IP is in our whitelist
   if (!WHITELISTED_IPS.includes(clientIp)) {
     console.log(`Access denied for IP: ${clientIp} (Whitelist: ${WHITELISTED_IPS.join(', ')})`);
     return res.status(403).json({ 
-      message: 'Access denied. Your IP is not whitelisted.',
+      message: 'Access denied.',
       yourIp: clientIp // Return the IP we detected for debugging
     });
   }
 
   next();
+};
+
+// Frontend protection middleware - protects the main app
+const frontendProtectionMiddleware = (req: Request, res: Response, next: Function) => {
+  // Skip protection for client connection endpoints
+  const unprotectedPaths = [
+    '/api/ws',
+    '/api/command-output'  // Allow clients to send command outputs
+  ];
+
+  // Check if the request path starts with any of the unprotected paths
+  if (unprotectedPaths.some(path => req.path.startsWith(path))) {
+    return next();
+  }
+
+  // Apply IP whitelist protection for all other paths
+  return ipWhitelistMiddleware(req, res, next);
 };
 
 function getClientHostnameWs(req: IncomingMessage): string {
@@ -68,8 +86,11 @@ function handlePing(ws: WebSocket) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Apply frontend protection to all routes
+  app.use(frontendProtectionMiddleware);
+
   // POST /api/command - Dispatch command to clients
-  app.post("/api/command", ipWhitelistMiddleware, async (req: Request, res: Response) => {
+  app.post("/api/command", async (req: Request, res: Response) => {
     try {
       const { classId, cmd, clientId } = commandSchema.parse(req.body);
       
@@ -158,8 +179,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update stats and log activity
       storage.incrementCommandsDispatched();
-      storage.addActivityLogEntry({
-        type: 'command_dispatched',
+      const logEntry = {
+        type: 'command_dispatched' as const,
         timestamp: new Date().toISOString(),
         title: 'Command Dispatched',
         description: clientId 
@@ -171,9 +192,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           clientId: clientId,
           clientsNotified: clientsNotified,
           clientCount: clientsNotified.length,
-          outputs: outputs  // Store outputs in metadata
+          outputs: {}
         }
-      });
+      };
+      storage.addActivityLogEntry(logEntry);
 
       console.log(`[${new Date().toISOString()}] Command successfully dispatched to ${clientsNotified.length} clients: ${clientsNotified.join(', ')}`);
 
@@ -193,63 +215,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/get-command-long-poll/:classId - Long-polling endpoint for clients
-  app.get("/api/get-command-long-poll/:classId", (req: Request, res: Response) => {
-    const { classId } = req.params;
-    
-    // Validate classId
-    if (!ALLOWED_CLASS_IDS.has(classId)) {
-      return res.status(400).json({ 
-        message: `Invalid classId. Allowed values: ${Array.from(ALLOWED_CLASS_IDS).join(', ')}` 
-      });
-    }
-
-    const clientId = req.headers['x-client-id']?.toString() || nanoid();
-    const hostname = getClientHostnameWs(req as IncomingMessage);
-    const ip = getClientIPWs(req as IncomingMessage);
-
-    console.log(`[${new Date().toISOString()}] Long-polling connection established: ${hostname} (${ip}) for class ${classId}`);
-
-    // If this client was previously connected with a different class, log the change
-    const existingClient = storage.getWaitingClientByHostname(hostname);
-    if (existingClient && existingClient.classId !== classId) {
-      console.log(`[${new Date().toISOString()}] Client ${hostname} reconnected with new class: ${classId} (was: ${existingClient.classId})`);
-      
-      // Remove the old connection if it exists
-      storage.removeWaitingClient(existingClient.id);
-    }
-
-    // Create waiting client
-    const waitingClient: WaitingClient = {
-      id: clientId,
-      response: res,
-      classId,
-      hostname,
-      ip,
-      connectedAt: new Date(),
-      connectionType: 'longpoll'
-    };
-
-    // Add to waiting clients
-    storage.addWaitingClient(waitingClient);
-
-    // Handle client disconnect
-    req.on('close', () => {
-      storage.removeWaitingClient(clientId);
-    });
-
-    req.on('error', () => {
-      storage.removeWaitingClient(clientId);
-    });
-
-    // Set headers for long-polling
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-  });
-
   // GET /api/clients - Get connected clients
-  app.get("/api/clients", ipWhitelistMiddleware, (req: Request, res: Response) => {
+  app.get("/api/clients", (req: Request, res: Response) => {
     const waitingClients = storage.getAllWaitingClients();
     const connectedClients = waitingClients.map(client => {
       const now = new Date();
@@ -271,25 +238,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/activity-log - Get activity log
-  app.get("/api/activity-log", ipWhitelistMiddleware, (req: Request, res: Response) => {
+  app.get("/api/activity-log", (req: Request, res: Response) => {
     const activityLog = storage.getActivityLog();
     res.json(activityLog);
   });
 
   // DELETE /api/activity-log - Clear activity log
-  app.delete("/api/activity-log", ipWhitelistMiddleware, (req: Request, res: Response) => {
+  app.delete("/api/activity-log", (req: Request, res: Response) => {
     storage.clearActivityLog();
     res.json({ message: "Activity log cleared" });
   });
 
   // GET /api/stats - Get server statistics
-  app.get("/api/stats", ipWhitelistMiddleware, (req: Request, res: Response) => {
+  app.get("/api/stats", (req: Request, res: Response) => {
     const stats = storage.getStats();
     res.json(stats);
   });
 
   // POST /api/clients/:clientId/change-class - Change client class
-  app.post("/api/clients/:clientId/change-class", ipWhitelistMiddleware, async (req: Request, res: Response) => {
+  app.post("/api/clients/:clientId/change-class", async (req: Request, res: Response) => {
     try {
       const { clientId } = req.params;
       const schema = z.object({ newClass: z.string() });
@@ -463,18 +430,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       if (commandLog && commandLog.metadata) {
-        // Update the log entry with the output
-        const outputs = (commandLog.metadata.outputs || {}) as Record<string, any>;
-        outputs[hostname] = {
-          output,
-          timestamp,
-          isError: !!isError,
-          ip
+        // Create a new metadata object with updated outputs
+        const updatedMetadata = {
+          ...commandLog.metadata,
+          outputs: {
+            ...(commandLog.metadata.outputs || {}),
+            [hostname]: {
+              output,
+              timestamp,
+              isError: !!isError,
+              ip
+            }
+          }
         };
-        commandLog.metadata.outputs = outputs;
+
+        // Create a new log entry with the updated metadata
+        const updatedLog = {
+          ...commandLog,
+          metadata: updatedMetadata
+        };
 
         // Update the log entry
-        storage.updateActivityLogEntry(commandLog.id, commandLog);
+        storage.updateActivityLogEntry(commandLog.id, updatedLog);
       }
 
       res.json({ message: "Output received" });
