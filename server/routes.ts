@@ -7,6 +7,43 @@ import { z } from "zod";
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'http';
 
+// Function to get client IP
+function getClientIP(req: Request): string {
+  // Get the X-Forwarded-For header value if exists
+  const forwardedFor = req.headers['x-forwarded-for'];
+  const forwardedIp = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor?.split(',')[0];
+  
+  // Get direct connection IP
+  const directIp = req.socket.remoteAddress;
+  
+  // Return the most likely real client IP
+  return (forwardedIp || directIp || '').trim();
+}
+
+// IP Whitelist Middleware
+const ipWhitelistMiddleware = (req: Request, res: Response, next: Function) => {
+  // Get whitelisted IPs from environment variable
+  const WHITELISTED_IPS = process.env.WHITELISTED_IPS ? process.env.WHITELISTED_IPS.split(',') : [];
+
+  // Always allow localhost for development
+  if (process.env.NODE_ENV === "development") {
+    return next();
+  }
+
+  const clientIp = getClientIP(req);
+  
+  // Check if the client's IP is in our whitelist
+  if (!WHITELISTED_IPS.includes(clientIp)) {
+    console.log(`Access denied for IP: ${clientIp} (Whitelist: ${WHITELISTED_IPS.join(', ')})`);
+    return res.status(403).json({ 
+      message: 'Access denied. Your IP is not whitelisted.',
+      yourIp: clientIp // Return the IP we detected for debugging
+    });
+  }
+
+  next();
+};
+
 function getClientHostnameWs(req: IncomingMessage): string {
   // Try to get hostname from headers, fallback to generating one
   const hostname = req.headers['x-hostname'] || 
@@ -32,7 +69,7 @@ function handlePing(ws: WebSocket) {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/command - Dispatch command to clients
-  app.post("/api/command", async (req: Request, res: Response) => {
+  app.post("/api/command", ipWhitelistMiddleware, async (req: Request, res: Response) => {
     try {
       const { classId, cmd, clientId } = commandSchema.parse(req.body);
       
@@ -209,7 +246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/clients - Get connected clients
-  app.get("/api/clients", (req: Request, res: Response) => {
+  app.get("/api/clients", ipWhitelistMiddleware, (req: Request, res: Response) => {
     const waitingClients = storage.getAllWaitingClients();
     const connectedClients = waitingClients.map(client => {
       const now = new Date();
@@ -231,25 +268,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/activity-log - Get activity log
-  app.get("/api/activity-log", (req: Request, res: Response) => {
+  app.get("/api/activity-log", ipWhitelistMiddleware, (req: Request, res: Response) => {
     const activityLog = storage.getActivityLog();
     res.json(activityLog);
   });
 
   // DELETE /api/activity-log - Clear activity log
-  app.delete("/api/activity-log", (req: Request, res: Response) => {
+  app.delete("/api/activity-log", ipWhitelistMiddleware, (req: Request, res: Response) => {
     storage.clearActivityLog();
     res.json({ message: "Activity log cleared" });
   });
 
   // GET /api/stats - Get server statistics
-  app.get("/api/stats", (req: Request, res: Response) => {
+  app.get("/api/stats", ipWhitelistMiddleware, (req: Request, res: Response) => {
     const stats = storage.getStats();
     res.json(stats);
   });
 
   // POST /api/clients/:clientId/change-class - Change client class
-  app.post("/api/clients/:clientId/change-class", async (req: Request, res: Response) => {
+  app.post("/api/clients/:clientId/change-class", ipWhitelistMiddleware, async (req: Request, res: Response) => {
     try {
       const { clientId } = req.params;
       const schema = z.object({ newClass: z.string() });

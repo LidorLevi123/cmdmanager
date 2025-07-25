@@ -1,4 +1,4 @@
-import { Monitor, RefreshCw, Search, MoreVertical } from "lucide-react";
+import { Monitor, RefreshCw, Search, MoreVertical, Send } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +6,7 @@ import { useClients, useChangeClientClass, useRemoveClient } from "@/hooks/use-c
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { ALLOWED_CLASS_IDS } from "@shared/schema";
+import type { ConnectedClient } from "@shared/schema";
 import {
   Select,
   SelectContent,
@@ -55,7 +56,7 @@ function ConnectedClients() {
 
   // Filter and sort clients
   const filteredAndSortedClients = useMemo(() => {
-    let filtered = [...clients];
+    let filtered = [...clients] as ConnectedClient[];
 
     // Apply class filter
     if (selectedClass && selectedClass !== 'all') {
@@ -130,6 +131,13 @@ function ConnectedClients() {
         variant: "destructive",
       });
     }
+  };
+
+  const handleSendCommand = (client: ConnectedClient) => {
+    const searchParams = new URLSearchParams();
+    searchParams.set('classId', client.classId);
+    searchParams.set('clientId', client.id);
+    window.location.search = searchParams.toString();
   };
 
   return (
@@ -220,7 +228,7 @@ function ConnectedClients() {
       <CardContent className="p-6 overflow-auto flex-1">
         {filteredAndSortedClients.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredAndSortedClients.map((client) => (
+            {filteredAndSortedClients.map((client: ConnectedClient) => (
               <div
                 key={client.id}
                 className="bg-gray-50 rounded-lg p-4 border border-gray-200 relative group"
@@ -262,7 +270,13 @@ function ConnectedClients() {
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>
                     <DropdownMenu.Content align="end" className="min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2">
-                      <DropdownMenu.Item
+                      <DropdownMenuItem
+                      onClick={() => handleSendCommand(client)}
+                      className="cursor-pointer"
+                    >
+                      Send Command
+                    </DropdownMenuItem>
+                    <DropdownMenu.Item
                         className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
                         onSelect={() =>
                           setChangeClassDialog({
