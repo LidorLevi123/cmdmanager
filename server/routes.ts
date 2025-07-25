@@ -474,11 +474,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     // Extract classId from URL query parameters instead of path
     const url = new URL(req.url || '', `http://${req.headers.host}`);
-    const classId = url.searchParams.get('classId');
+    let classId = url.searchParams.get('classId');
     
+    // If no classId provided or invalid, assign default class
     if (!classId || !ALLOWED_CLASS_IDS.has(classId)) {
-      ws.close(1008, 'Invalid classId');
-      return;
+      const defaultClass = Array.from(ALLOWED_CLASS_IDS)[0]; // Use first allowed class as default
+      console.log(`[${new Date().toISOString()}] No valid classId provided, assigning default class: ${defaultClass}`);
+      classId = defaultClass;
     }
 
     // Get client info
@@ -519,6 +521,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Add to waiting clients
     storage.addWaitingClient(waitingClient);
+
+    // Send command to update class.txt with assigned class
+    try {
+      ws.send(JSON.stringify({
+        type: 'command',
+        cmd: `echo ${classId} > C:\\cmdmanager\\class.txt`,
+        timestamp: new Date().toISOString()
+      }));
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] Error sending class update command to ${hostname}:`, error);
+    }
 
     // Handle WebSocket messages
     ws.on('message', (data: Buffer) => {
