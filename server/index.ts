@@ -4,9 +4,17 @@ import MemoryStore from "memorystore";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import path from "path";
+import { fileURLToPath } from "url";
 import { handleLogin, handleLogout, getCurrentUser, requireAuth } from "./auth";
 import { registerRoutes } from "./routes";
 import { registerViteDevServer } from "./vite";
+import { Request, Response } from "express";
+
+// Get directory paths for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = path.dirname(__dirname);
 
 const app = express();
 
@@ -80,6 +88,22 @@ app.use("/api", (req, res, next) => {
   }
   requireAuth(req, res, next);
 });
+
+// Serve static files in production
+if (process.env.NODE_ENV === "production") {
+  // Serve only the dist folder's contents
+  app.use('/', express.static(path.join(rootDir, 'client', 'dist')));
+
+  // Handle React routing, but only for non-API routes
+  app.get('/*', (req: Request, res: Response, next: Function) => {
+    // Skip API routes
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
+    // Only serve index.html from dist folder
+    res.sendFile(path.join(rootDir, 'client', 'dist', 'index.html'));
+  });
+}
 
 // Register other routes
 registerRoutes(app).then((httpServer) => {
