@@ -23,6 +23,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { DropdownMenuItem } from "@radix-ui/react-dropdown-menu";
 
 const SORT_OPTIONS = [
   { value: "newest", label: "Newest First" },
@@ -134,10 +135,14 @@ function ConnectedClients() {
   };
 
   const handleSendCommand = (client: ConnectedClient) => {
-    const searchParams = new URLSearchParams();
-    searchParams.set('classId', client.classId);
-    searchParams.set('clientId', client.id);
-    window.location.search = searchParams.toString();
+    // Build the URL with query parameters
+    const params = new URLSearchParams({
+      classId: client.classId,
+      clientId: client.id
+    });
+    
+    // Navigate to the command form with parameters
+    window.location.href = `/?${params.toString()}`;
   };
 
   return (
@@ -270,13 +275,13 @@ function ConnectedClients() {
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>
                     <DropdownMenu.Content align="end" className="min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2">
-                      <DropdownMenuItem
-                      onClick={() => handleSendCommand(client)}
-                      className="cursor-pointer"
-                    >
-                      Send Command
-                    </DropdownMenuItem>
-                    <DropdownMenu.Item
+                      <DropdownMenu.Item
+                        className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                        onSelect={() => handleSendCommand(client)}
+                      >
+                        Send Command
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
                         className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
                         onSelect={() =>
                           setChangeClassDialog({
