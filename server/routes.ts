@@ -23,7 +23,13 @@ function getClientIP(req: Request): string {
 // IP Whitelist Middleware
 const ipWhitelistMiddleware = (req: Request, res: Response, next: Function) => {
   // Get whitelisted IPs from environment variable
-  const WHITELISTED_IPS = process.env.WHITELISTED_IPS ? process.env.WHITELISTED_IPS.split(',').map(ip => ip.trim()) : [];
+  const defaultIPs = process.env.NODE_ENV === 'production' 
+    ? []
+    : ['127.0.0.1', '::1']; // Local development IPs
+
+  const WHITELISTED_IPS = process.env.WHITELISTED_IPS 
+    ? [...defaultIPs, ...process.env.WHITELISTED_IPS.split(',').map(ip => ip.trim())]
+    : defaultIPs;
 
   // Always allow localhost for development
   if (process.env.NODE_ENV === "development") {
@@ -35,10 +41,11 @@ const ipWhitelistMiddleware = (req: Request, res: Response, next: Function) => {
   
   // Check if the client's IP is in our whitelist
   if (!WHITELISTED_IPS.includes(clientIp)) {
-    console.log(`Access denied for IP: ${clientIp} (Whitelist: ${WHITELISTED_IPS.join(', ')})`);
+    console.log(`[${new Date().toISOString()}] Access denied for IP: ${clientIp} (Whitelist: ${WHITELISTED_IPS.join(', ')})`);
     return res.status(403).json({ 
       message: 'Access denied.',
-      yourIp: clientIp // Return the IP we detected for debugging
+      yourIp: clientIp, // Return the IP we detected for debugging
+      environment: process.env.NODE_ENV
     });
   }
 

@@ -83,6 +83,7 @@ app.use("/api", (req, res, next) => {
 
 // Register other routes
 registerRoutes(app).then((httpServer) => {
+  // OnRender uses PORT environment variable
   const port = process.env.PORT || 3000;
   
   // Setup Vite in development mode
@@ -95,6 +96,7 @@ registerRoutes(app).then((httpServer) => {
 
   httpServer.listen(port, () => {
     console.log(`Server running on port ${port}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   });
 }).catch(err => {
   console.error("Failed to start server:", err);
