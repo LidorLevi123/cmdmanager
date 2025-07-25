@@ -30,3 +30,17 @@ export function useChangeClientClass() {
     }
   });
 }
+
+export function useRemoveClient() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (clientId: string) => {
+      const response = await apiRequest("POST", `/api/clients/${clientId}/remove`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+    }
+  });
+}

@@ -2,7 +2,7 @@ import { Monitor, RefreshCw, Search, MoreVertical } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useClients, useChangeClientClass } from "@/hooks/use-clients";
+import { useClients, useChangeClientClass, useRemoveClient } from "@/hooks/use-clients";
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { ALLOWED_CLASS_IDS } from "@shared/schema";
@@ -13,12 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +33,7 @@ const SORT_OPTIONS = [
 function ConnectedClients() {
   const { data: clients = [], isLoading, refetch } = useClients();
   const changeClass = useChangeClientClass();
+  const removeClient = useRemoveClient();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClass, setSelectedClass] = useState("all");
@@ -113,6 +109,24 @@ function ConnectedClients() {
       toast({
         title: "Error",
         description: "Failed to update client class.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRemoveClient = async (clientId: string, hostname: string) => {
+    if (removeClient.isPending) return;
+
+    try {
+      await removeClient.mutateAsync(clientId);
+      toast({
+        title: "Success",
+        description: `Client ${hostname} has been removed.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to remove client.",
         variant: "destructive",
       });
     }
@@ -236,8 +250,8 @@ function ConnectedClients() {
                     <span className="font-mono">{client.ip}</span>
                   </div>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -245,25 +259,31 @@ function ConnectedClients() {
                     >
                       <MoreVertical className="h-4 w-4" />
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() =>
-                        setChangeClassDialog({
-                          isOpen: true,
-                          clientId: client.id,
-                          currentClass: client.classId,
-                        })
-                      }
-                      className="cursor-pointer"
-                    >
-                      Edit Class
-                    </DropdownMenuItem>
-                    <DropdownMenuItem disabled className="cursor-not-allowed">
-                      Remove
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content align="end" className="min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2">
+                      <DropdownMenu.Item
+                        className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                        onSelect={() =>
+                          setChangeClassDialog({
+                            isOpen: true,
+                            clientId: client.id,
+                            currentClass: client.classId,
+                          })
+                        }
+                      >
+                        Edit Class
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
+                        className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors text-red-600 hover:bg-red-50 hover:text-red-600 data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                        onSelect={() => handleRemoveClient(client.id, client.hostname)}
+                        disabled={removeClient.isPending}
+                      >
+                        Remove
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
               </div>
             ))}
           </div>
