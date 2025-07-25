@@ -50,13 +50,6 @@ const ALLOWED_CLASS_IDS = [
   "58.1.1",
   "58.1.3",
 ];
-const QUICK_COMMANDS = [
-  { label: "System Info", command: "systeminfo" },
-  { label: "IP Config", command: "ipconfig" },
-  { label: "Restart", command: "restart" },
-  { label: "Ping Test", command: "ping google.com" },
-];
-
 interface SortableItemProps {
   command: QuickCommand;
   isEditing: boolean;

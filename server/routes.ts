@@ -324,7 +324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Send command to client
       try {
-        client.response.json(commandResponse);
+        client.response?.json(commandResponse);
         storage.removeWaitingClient(clientId);
         console.log(`[${new Date().toISOString()}] Class update command sent to ${client.hostname} (${client.ip})`);
         
