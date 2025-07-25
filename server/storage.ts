@@ -1,13 +1,16 @@
 import { ConnectedClient, ActivityLogEntry, ServerStats } from "@shared/schema";
 import type { Response } from "express";
+import type { WebSocket } from 'ws';
 
 export interface WaitingClient {
   id: string;
-  response: Response;
+  response?: Response;  // Optional now since we'll use either response or ws
+  ws?: WebSocket;       // WebSocket connection
   classId: string;
   hostname: string;
   ip: string;
   connectedAt: Date;
+  connectionType: 'longpoll' | 'websocket';
 }
 
 export interface IStorage {
@@ -53,22 +56,17 @@ export class MemStorage implements IStorage {
       description: `Command Dispatcher listening on port ${process.env.PORT || 5000}`,
       metadata: {
         port: process.env.PORT || 5000,
-        endpoints: ['POST /api/command', 'GET /api/get-command-long-poll/:classId']
+        endpoints: ['POST /api/command', 'GET /api/get-command-long-poll/:classId', 'WS /ws/:classId']
       }
     });
   }
 
   updateClientClass(clientId: string, newClass: string): void {
     const client = this.waitingClients.get(clientId);
-    console.log(client?.classId);
     if (client) {
       client.classId = newClass;
-      
       this.waitingClients.set(clientId, client);
-      console.log('here2');
-      
       console.log(`[${new Date().toISOString()}] Updated client ${client.hostname} class to ${newClass} in storage`);
-      console.log('🚀 ~ MemStorage ~ updateClientClass ~ this.waitingClients:', this.waitingClients)
     }
   }
 
@@ -80,20 +78,26 @@ export class MemStorage implements IStorage {
       type: 'client_connected',
       timestamp: new Date().toISOString(),
       title: 'Client Connected',
-      description: `${client.hostname} joined class ${client.classId}`,
+      description: `${client.hostname} joined class ${client.classId} via ${client.connectionType}`,
       metadata: {
         hostname: client.hostname,
         classId: client.classId,
-        ip: client.ip
+        ip: client.ip,
+        connectionType: client.connectionType
       }
     });
     
-    console.log(`[${new Date().toISOString()}] Client connected: ${client.hostname} (${client.ip}) for class ${client.classId}`);
+    console.log(`[${new Date().toISOString()}] Client connected: ${client.hostname} (${client.ip}) for class ${client.classId} via ${client.connectionType}`);
   }
 
   removeWaitingClient(clientId: string): void {
     const client = this.waitingClients.get(clientId);
     if (client) {
+      // Close WebSocket if it exists
+      if (client.ws && client.ws.readyState === 1) {
+        client.ws.close();
+      }
+      
       this.waitingClients.delete(clientId);
       
       this.addActivityLogEntry({
@@ -104,7 +108,8 @@ export class MemStorage implements IStorage {
         metadata: {
           hostname: client.hostname,
           classId: client.classId,
-          ip: client.ip
+          ip: client.ip,
+          connectionType: client.connectionType
         }
       });
       

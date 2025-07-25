@@ -4,8 +4,10 @@ import { storage, WaitingClient } from "./storage";
 import { commandSchema, ALLOWED_CLASS_IDS } from "@shared/schema";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { WebSocketServer, WebSocket } from 'ws';
+import type { IncomingMessage } from 'http';
 
-function getClientHostname(req: Request): string {
+function getClientHostnameWs(req: IncomingMessage): string {
   // Try to get hostname from headers, fallback to generating one
   const hostname = req.headers['x-hostname'] || 
                   req.headers['host']?.split('.')[0] || 
@@ -13,13 +15,19 @@ function getClientHostname(req: Request): string {
   return hostname.toString().toUpperCase();
 }
 
-function getClientIP(req: Request): string {
+function getClientIPWs(req: IncomingMessage): string {
   return req.headers['x-ip']?.toString() || 
-         req.ip || 
-         req.connection.remoteAddress || 
          req.socket.remoteAddress || 
-         (req.connection as any)?.socket?.remoteAddress ||
          '127.0.0.1';
+}
+
+// Function to handle WebSocket ping messages
+function handlePing(ws: WebSocket) {
+  try {
+    ws.send(JSON.stringify({ type: 'pong', timestamp: new Date().toISOString() }));
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error sending pong:`, error);
+  }
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -92,11 +100,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             storage.updateClientClass(client.id, newClass);
           }
 
-          // Send the command
-          client.response.json(commandResponse);
-          clientsNotified.push(client.hostname);
-          storage.removeWaitingClient(client.id);
-          console.log(`[${new Date().toISOString()}] Command sent to ${client.hostname} (${client.ip})`);
+          // Send the command based on connection type
+          if (client.connectionType === 'websocket' && client.ws?.readyState === WebSocket.OPEN) {
+            client.ws.send(JSON.stringify(commandResponse));
+            clientsNotified.push(client.hostname);
+          } else if (client.connectionType === 'longpoll' && client.response && 'json' in client.response) {
+            client.response.json(commandResponse);
+            clientsNotified.push(client.hostname);
+            storage.removeWaitingClient(client.id);
+          }
+
+          console.log(`[${new Date().toISOString()}] Command sent to ${client.hostname} (${client.ip}) via ${client.connectionType}`);
         } catch (error) {
           console.error(`[${new Date().toISOString()}] Failed to send command to ${client.hostname}: ${error}`);
           storage.removeWaitingClient(client.id);
@@ -151,8 +165,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     const clientId = req.headers['x-client-id']?.toString() || nanoid();
-    const hostname = getClientHostname(req);
-    const ip = getClientIP(req);
+    const hostname = getClientHostnameWs(req as IncomingMessage);
+    const ip = getClientIPWs(req as IncomingMessage);
 
     console.log(`[${new Date().toISOString()}] Long-polling connection established: ${hostname} (${ip}) for class ${classId}`);
 
@@ -172,7 +186,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       classId,
       hostname,
       ip,
-      connectedAt: new Date()
+      connectedAt: new Date(),
+      connectionType: 'longpoll'
     };
 
     // Add to waiting clients
@@ -328,6 +343,163 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/clients/:clientId/remove - Remove a client by sending a kill command
+  app.post("/api/clients/:clientId/remove", async (req: Request, res: Response) => {
+    try {
+      const { clientId } = req.params;
+      
+      // Find the client
+      const client = storage.getWaitingClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      // Send a kill command to the client
+      const commandResponse = {
+        class: client.classId,
+        cmd: "taskkill /F /PID $PID",
+        timestamp: new Date().toISOString()
+      };
+
+      try {
+        if (client.connectionType === 'websocket' && client.ws?.readyState === WebSocket.OPEN) {
+          client.ws.send(JSON.stringify(commandResponse));
+        } else if (client.connectionType === 'longpoll' && client.response) {
+          client.response.json(commandResponse);
+        }
+        
+        // Remove client from storage
+        storage.removeWaitingClient(clientId);
+        
+        // Log the removal
+        storage.addActivityLogEntry({
+          type: 'client_disconnected',
+          timestamp: new Date().toISOString(),
+          title: 'Client Removed',
+          description: `Client ${client.hostname} was removed by admin`,
+          metadata: {
+            hostname: client.hostname,
+            classId: client.classId,
+            ip: client.ip
+          }
+        });
+
+        res.json({ 
+          message: "Client removal command sent successfully",
+          client: {
+            id: client.id,
+            hostname: client.hostname,
+            classId: client.classId,
+            ip: client.ip
+          }
+        });
+
+      } catch (error) {
+        console.error(`[${new Date().toISOString()}] Failed to send removal command to ${client.hostname}: ${error}`);
+        storage.removeWaitingClient(clientId);
+        return res.status(500).json({ message: "Failed to send removal command to client" });
+      }
+
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] Error removing client:`, error);
+      res.status(400).json({ 
+        message: error instanceof Error ? error.message : "Invalid request" 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
+  
+  // Setup WebSocket server with a specific path prefix
+  const wss = new WebSocketServer({ 
+    server: httpServer,
+    path: '/api/ws'  // Add specific path prefix for our WebSocket connections
+  });
+
+  wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    // Extract classId from URL query parameters instead of path
+    const url = new URL(req.url || '', `http://${req.headers.host}`);
+    const classId = url.searchParams.get('classId');
+    
+    if (!classId || !ALLOWED_CLASS_IDS.has(classId)) {
+      ws.close(1008, 'Invalid classId');
+      return;
+    }
+
+    // Get client info
+    const clientId = nanoid();
+    const hostname = getClientHostnameWs(req);
+    const ip = getClientIPWs(req);
+
+    console.log(`[${new Date().toISOString()}] WebSocket connection established: ${hostname} (${ip}) for class ${classId}`);
+
+    // Setup ping interval
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.ping();
+        } catch (error) {
+          console.error(`[${new Date().toISOString()}] Error sending ping to ${hostname}:`, error);
+        }
+      }
+    }, 30000);
+
+    // If this client was previously connected with a different class, log the change
+    const existingClient = storage.getWaitingClientByHostname(hostname);
+    if (existingClient) {
+      console.log(`[${new Date().toISOString()}] Client ${hostname} reconnected with new class: ${classId} (was: ${existingClient.classId})`);
+      storage.removeWaitingClient(existingClient.id);
+    }
+
+    // Create waiting client
+    const waitingClient: WaitingClient = {
+      id: clientId,
+      ws,
+      classId,
+      hostname,
+      ip,
+      connectedAt: new Date(),
+      connectionType: 'websocket'
+    };
+
+    // Add to waiting clients
+    storage.addWaitingClient(waitingClient);
+
+    // Handle WebSocket messages
+    ws.on('message', (data: Buffer) => {
+      try {
+        const message = JSON.parse(data.toString());
+        if (message.type === 'ping') {
+          handlePing(ws);
+        }
+      } catch (error) {
+        console.error(`[${new Date().toISOString()}] Error processing message from ${hostname}:`, error);
+      }
+    });
+
+    // Handle client disconnect
+    ws.on('close', () => {
+      clearInterval(pingInterval);
+      storage.removeWaitingClient(clientId);
+    });
+
+    ws.on('error', () => {
+      clearInterval(pingInterval);
+      storage.removeWaitingClient(clientId);
+    });
+
+    // Send initial connection confirmation
+    try {
+      ws.send(JSON.stringify({
+        type: 'connection_established',
+        clientId,
+        classId,
+        timestamp: new Date().toISOString()
+      }));
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] Error sending connection confirmation to ${hostname}:`, error);
+    }
+  });
+
   return httpServer;
 }
