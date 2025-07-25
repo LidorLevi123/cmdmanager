@@ -25,6 +25,7 @@ export interface IStorage {
   
   // Activity log
   addActivityLogEntry(entry: Omit<ActivityLogEntry, 'id'>): void;
+  updateActivityLogEntry(id: string, entry: ActivityLogEntry): void;
   getActivityLog(): ActivityLogEntry[];
   clearActivityLog(): void;
   
@@ -146,6 +147,13 @@ export class MemStorage implements IStorage {
     // Keep only last 100 entries
     if (this.activityLog.length > 100) {
       this.activityLog = this.activityLog.slice(0, 100);
+    }
+  }
+
+  updateActivityLogEntry(id: string, entry: ActivityLogEntry): void {
+    const index = this.activityLog.findIndex(e => e.id === id);
+    if (index !== -1) {
+      this.activityLog[index] = entry;
     }
   }
 

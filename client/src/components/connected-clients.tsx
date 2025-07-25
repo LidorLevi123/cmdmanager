@@ -104,7 +104,7 @@ function ConnectedClients() {
       });
       toast({
         title: "Success",
-        description: "Client class update command sent successfully. The client will reconnect shortly.",
+        description: "Client class update command sent successfully.",
       });
       setChangeClassDialog({ isOpen: false, clientId: "", currentClass: "" });
     } catch (error) {

@@ -129,6 +129,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Send command to target clients
       const clientsNotified: string[] = [];
+      const outputs: Record<string, string> = {};  // Store outputs for each client
+
       for (const client of targetClients) {
         try {
           // If this is a class change command, update the class in storage first
@@ -142,7 +144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             client.ws.send(JSON.stringify(commandResponse));
             clientsNotified.push(client.hostname);
           } else if (client.connectionType === 'longpoll' && client.response && 'json' in client.response) {
-            client.response.json(commandResponse);
+            (client.response as Response).json(commandResponse);
             clientsNotified.push(client.hostname);
             storage.removeWaitingClient(client.id);
           }
@@ -168,7 +170,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           classId: classId,
           clientId: clientId,
           clientsNotified: clientsNotified,
-          clientCount: clientsNotified.length
+          clientCount: clientsNotified.length,
+          outputs: outputs  // Store outputs in metadata
         }
       });
 
@@ -439,6 +442,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error) {
       console.error(`[${new Date().toISOString()}] Error removing client:`, error);
+      res.status(400).json({ 
+        message: error instanceof Error ? error.message : "Invalid request" 
+      });
+    }
+  });
+
+  // POST /api/command-output - Receive command output from clients
+  app.post("/api/command-output", async (req: Request, res: Response) => {
+    try {
+      const { command, output, timestamp, isError } = req.body;
+      const hostname = req.headers['x-hostname'] as string;
+      const ip = req.headers['x-ip'] as string;
+
+      // Find the most recent command_dispatched log entry for this command
+      const recentLogs = storage.getActivityLog().slice(0, 10); // Look at last 10 entries
+      const commandLog = recentLogs.find(log => 
+        log.type === 'command_dispatched' && 
+        log.metadata?.command === command
+      );
+
+      if (commandLog && commandLog.metadata) {
+        // Update the log entry with the output
+        const outputs = (commandLog.metadata.outputs || {}) as Record<string, any>;
+        outputs[hostname] = {
+          output,
+          timestamp,
+          isError: !!isError,
+          ip
+        };
+        commandLog.metadata.outputs = outputs;
+
+        // Update the log entry
+        storage.updateActivityLogEntry(commandLog.id, commandLog);
+      }
+
+      res.json({ message: "Output received" });
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] Error processing command output:`, error);
       res.status(400).json({ 
         message: error instanceof Error ? error.message : "Invalid request" 
       });
