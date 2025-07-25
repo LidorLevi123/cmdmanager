@@ -20,10 +20,10 @@ const rootDir = path.dirname(__dirname);
 const getDistPath = () => {
   if (process.env.NODE_ENV === 'production') {
     // OnRender's project structure
-    return '/opt/render/project/src/client/dist';
+    return '/opt/render/project/src/dist/public';
   }
   // Local development
-  return path.join(rootDir, 'client', 'dist');
+  return path.join(rootDir, 'dist', 'public');
 };
 
 const app = express();
@@ -104,7 +104,7 @@ if (process.env.NODE_ENV === "production") {
   const distPath = getDistPath();
   console.log(`Serving static files from: ${distPath}`);
   
-  // Serve only the dist folder's contents
+  // Serve only the dist/public folder's contents
   app.use('/', express.static(distPath));
 
   // Handle React routing, but only for non-API routes
@@ -113,7 +113,7 @@ if (process.env.NODE_ENV === "production") {
     if (req.path.startsWith('/api/')) {
       return next();
     }
-    // Only serve index.html from dist folder
+    // Only serve index.html from dist/public folder
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }
