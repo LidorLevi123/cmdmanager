@@ -352,7 +352,7 @@ function CommandForm() {
                 placeholder="Enter command to execute..."
                 rows={4}
                 className="font-mono text-sm resize-none"
-                maxLength={500}
+                maxLength={2000}
               />
               <div className="absolute bottom-2 right-2 text-xs text-gray-400">
                 {commandText.length}/500
