@@ -9,6 +9,7 @@ import { fileURLToPath } from "url";
 import { handleLogin, handleLogout, getCurrentUser, requireAuth } from "./auth";
 import { registerRoutes } from "./routes";
 import { registerViteDevServer } from "./vite";
+import { dbService } from "./database";
 import { Request, Response } from "express";
 
 // Get directory paths for ES modules
@@ -124,7 +125,15 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // Register other routes
-registerRoutes(app).then((httpServer) => {
+registerRoutes(app).then(async (httpServer) => {
+  // Initialize database connection
+  try {
+    await dbService.connect();
+  } catch (error) {
+    console.error("Failed to connect to database:", error);
+    process.exit(1);
+  }
+
   // OnRender uses PORT environment variable
   const port = process.env.PORT || 3000;
   
@@ -139,6 +148,25 @@ registerRoutes(app).then((httpServer) => {
   httpServer.listen(port, () => {
     console.log(`Server running on port ${port}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+
+  // Graceful shutdown
+  process.on('SIGTERM', async () => {
+    console.log('SIGTERM received, shutting down gracefully');
+    await dbService.disconnect();
+    httpServer.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
+  });
+
+  process.on('SIGINT', async () => {
+    console.log('SIGINT received, shutting down gracefully');
+    await dbService.disconnect();
+    httpServer.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
   });
 }).catch(err => {
   console.error("Failed to start server:", err);

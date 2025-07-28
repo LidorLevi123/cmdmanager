@@ -1,10 +1,8 @@
 import { Request, Response, NextFunction } from "express";
-import { readFileSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
 import { loginSchema } from "@shared/schema";
 import type { User } from "@shared/schema";
+import { dbService, type UserWithPassword } from "./database";
 import 'express-session';
 
 // Extend Express.Session type
@@ -13,17 +11,6 @@ declare module 'express-session' {
     userId: string;
     userRole: string;
   }
-}
-
-// Get current directory in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Read users from JSON file
-function getUsers(): { users: (User & { passwordHash: string })[] } {
-  const usersPath = join(__dirname, "users.json");
-  const usersFile = readFileSync(usersPath, "utf-8");
-  return JSON.parse(usersFile);
 }
 
 // Authentication middleware
@@ -38,10 +25,8 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
 export const handleLogin = async (req: Request, res: Response) => {
   try {
     const credentials = loginSchema.parse(req.body);
-    const { users } = getUsers();
     
-    // Make username check case-insensitive
-    const user = users.find(u => u.username.toLowerCase() === credentials.username.toLowerCase());
+    const user = await dbService.findUserByUsername(credentials.username);
     if (!user) {
       return res.status(401).json({ 
         success: false,
@@ -56,6 +41,9 @@ export const handleLogin = async (req: Request, res: Response) => {
         message: "Invalid credentials" 
       });
     }
+
+    // Update last login in production
+    await dbService.updateUserLastLogin(user.id, new Date());
 
     // Set session
     req.session.userId = user.id;
@@ -98,7 +86,7 @@ export const handleLogout = (req: Request, res: Response) => {
 };
 
 // Get current user
-export const getCurrentUser = (req: Request, res: Response) => {
+export const getCurrentUser = async (req: Request, res: Response) => {
   if (!req.session.userId) {
     return res.status(401).json({ 
       success: false,
@@ -106,8 +94,7 @@ export const getCurrentUser = (req: Request, res: Response) => {
     });
   }
 
-  const { users } = getUsers();
-  const user = users.find(u => u.id === req.session.userId);
+  const user = await dbService.findUserById(req.session.userId);
   
   if (!user) {
     return res.status(404).json({ 
